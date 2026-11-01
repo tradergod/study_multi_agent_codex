@@ -1,0 +1,29 @@
+# Dummy test and Worktree directories
+testproject/
+wt-interaction/
+wt-persistence/
+wt-tests/
+wt-ui/
+
+# Compressed archives
+*.zip
+*.tar.gz
+
+# Python & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.codex/
+
+# Vendor logs & IDE
+.idea/
+.vscode/
+NVIDIA Corporation/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git sub backups
+.git_sub_bak/

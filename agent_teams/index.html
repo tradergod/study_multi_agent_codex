@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>리뷰 요청 목록</title>
+  <style>
+    /* ==== STYLE: RESET ==== */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; }
+
+    /* ==== STYLE: VARIABLES ==== */
+    :root {
+      --color-bg: #f5f6f8;
+      --color-surface: #ffffff;
+      --color-border: #d9dce1;
+      --color-text: #1a1d23;
+      --color-muted: #6b7280;
+      --color-p0: #d64545;
+      --color-p1: #d99a2b;
+      --color-p2: #3a7bd5;
+      --color-selected-bg: #eef3ff;
+      --color-selected-border: #3a7bd5;
+      --list-col-width: minmax(280px, 360px);
+    }
+
+    /* ==== STYLE: LAYOUT ==== */
+    body { background: var(--color-bg); color: var(--color-text); }
+    #app-main {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+      gap: 24px;
+      overflow-x: auto;
+    }
+
+    /* ==== STYLE: HEADER ==== */
+    #app-header { padding: 32px 40px 20px; }
+    #app-header h1 { margin: 0; font-size: 28px; }
+
+    /* ==== STYLE: LIST ==== */
+    #app-main { min-width: 720px; padding: 0 40px 24px; }
+    #app-list { min-height: 420px; padding: 8px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; }
+    .request-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; border-bottom: 1px solid var(--color-border); cursor: pointer; }
+    .request-item:last-child { border-bottom: 0; }
+    .request-item:focus-visible { outline: 3px solid var(--color-selected-border); outline-offset: -3px; }
+    .request-item.is-selected { background: var(--color-selected-bg); box-shadow: inset 4px 0 var(--color-selected-border); }
+    .request-title { font-weight: 600; }
+    .priority-badge { flex: 0 0 auto; padding: 4px 8px; border-radius: 999px; color: #fff; font-size: 12px; font-weight: 700; }
+    .priority-badge[data-priority="P0"] { background: var(--color-p0); }
+    .priority-badge[data-priority="P1"] { background: var(--color-p1); }
+    .priority-badge[data-priority="P2"] { background: var(--color-p2); }
+    #app-list-empty { padding: 48px 16px; color: var(--color-muted); text-align: center; }
+
+    /* ==== STYLE: DETAIL ==== */
+    #detail-panel { min-width: 360px; min-height: 420px; padding: 24px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; }
+    #detail-panel h2 { margin-top: 0; }
+    #detail-placeholder { color: var(--color-muted); padding: 48px 0; }
+    #detail-content p { margin: 0; padding: 14px 0; border-bottom: 1px solid var(--color-border); }
+
+    /* ==== STYLE: STATUS ==== */
+    #status-bar { padding: 0 40px 24px; color: var(--color-muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <!-- ==== SECTION: HEADER ==== -->
+  <header id="app-header">
+    <h1>리뷰 요청 목록</h1>
+  </header>
+
+  <main id="app-main">
+    <!-- ==== SECTION: LIST ==== -->
+    <section aria-labelledby="list-heading">
+      <h2 id="list-heading">요청 목록</h2>
+      <div id="app-list" role="listbox" aria-label="요청 목록"></div>
+    </section>
+
+    <!-- ==== SECTION: DETAIL ==== -->
+    <section id="detail-panel" role="region" aria-label="상세 정보" aria-labelledby="detail-heading">
+      <h2 id="detail-heading">상세 정보</h2>
+      <div id="detail-placeholder"></div>
+      <div id="detail-content" hidden>
+        <p id="detail-priority"></p>
+        <p id="detail-needs-review"></p>
+        <p id="detail-assignee"></p>
+        <p id="detail-next-action"></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==== SECTION: STATUS ==== -->
+  <footer id="status-bar"></footer>
+
+  <script>
+    // ==== JS: DATA ====
+    const state = {
+      requests: [
+        { id: "1", title: "PR #123: 로그인 리팩터링", priority: "P0", needsReview: true, assignee: "김도윤", nextAction: "테스트 케이스 보완 후 재요청" },
+        { id: "2", title: "Issue #45: 결제 실패 로그 누락", priority: "P0", needsReview: true, assignee: "미배정", nextAction: "담당자 배정 필요" },
+        { id: "3", title: "PR #130: 다크모드 스타일 적용", priority: "P1", needsReview: false, assignee: "이서연", nextAction: "머지 대기" },
+        { id: "4", title: "Issue #52: 알림 중복 발송", priority: "P1", needsReview: true, assignee: "박지훈", nextAction: "재현 스텝 확인 중" },
+        { id: "5", title: "PR #128: API 응답 캐싱", priority: "P2", needsReview: false, assignee: "최민서", nextAction: "다음 스프린트로 이동" },
+        { id: "6", title: "Issue #60: 문서 오타 수정", priority: "P2", needsReview: true, assignee: "미배정", nextAction: "리뷰어 배정 필요" }
+      ],
+      selectedId: null
+    };
+
+    // ==== JS: DOM_REFS ====
+    const dom = {
+      appList: document.querySelector("#app-list"),
+      detailPanel: document.querySelector("#detail-panel"),
+      detailPlaceholder: document.querySelector("#detail-placeholder"),
+      detailContent: document.querySelector("#detail-content"),
+      detailPriority: document.querySelector("#detail-priority"),
+      detailNeedsReview: document.querySelector("#detail-needs-review"),
+      detailAssignee: document.querySelector("#detail-assignee"),
+      detailNextAction: document.querySelector("#detail-next-action"),
+      statusBar: document.querySelector("#status-bar")
+    };
+
+    // ==== JS: RENDER ====
+    function renderList() {
+      if (state.requests.length === 0) {
+        dom.appList.innerHTML = '<p id="app-list-empty">표시할 요청이 없습니다.</p>';
+      } else {
+        dom.appList.innerHTML = state.requests.map((request) => `
+          <div class="request-item${state.selectedId === request.id ? " is-selected" : ""}" data-id="${request.id}" role="option" tabindex="0" aria-selected="${state.selectedId === request.id}">
+            <span class="request-title">${request.title}</span>
+            <span class="priority-badge" data-priority="${request.priority}">${request.priority}</span>
+          </div>
+        `).join('');
+      }
+      dom.statusBar.textContent = `총 ${state.requests.length}건`;
+    }
+
+    function renderDetail() {
+      const request = state.requests.find((item) => item.id === state.selectedId);
+      const hasSelection = Boolean(request);
+      dom.detailPlaceholder.textContent = hasSelection ? '' : '목록에서 요청을 선택하면 상세 정보가 표시됩니다.';
+      dom.detailPlaceholder.hidden = hasSelection;
+      dom.detailContent.hidden = !hasSelection;
+      if (!hasSelection) return;
+      dom.detailPriority.textContent = `우선순위: ${request.priority}`;
+      dom.detailNeedsReview.textContent = request.needsReview ? '리뷰 필요' : '리뷰 불필요';
+      dom.detailNeedsReview.dataset.needsReview = String(request.needsReview);
+      dom.detailAssignee.textContent = `담당: ${request.assignee}`;
+      dom.detailNextAction.textContent = `다음 액션: ${request.nextAction}`;
+    }
+    function renderApp() {
+      renderList();
+      renderDetail();
+    }
+
+    // ==== JS: INTERACTION ====
+    function selectRequest(id) {
+      if (state.selectedId === id) return;
+      if (!state.requests.some((request) => request.id === id)) return;
+      state.selectedId = id;
+      renderApp();
+    }
+    function handleListClick(event) {
+      const item = event.target.closest(".request-item");
+      if (!item || !dom.appList.contains(item)) return;
+      selectRequest(item.dataset.id);
+    }
+    function handleListKeydown(event) {
+      const item = event.target.closest(".request-item");
+      if (!item || !dom.appList.contains(item)) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      selectRequest(item.dataset.id);
+    }
+    function attachListEventListeners() {
+      dom.appList.addEventListener("click", handleListClick);
+      dom.appList.addEventListener("keydown", handleListKeydown);
+    }
+
+    // ==== JS: PERSISTENCE ====
+    function safeLocalStorageGet(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (error) {
+        return null;
+      }
+    }
+    function safeLocalStorageSet(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    // ==== JS: INIT ====
+    function initApp() {
+      state.selectedId = null;
+      if (new URLSearchParams(location.search).get("empty") === "1") {
+        state.requests = [];
+      }
+      attachListEventListeners();
+      renderApp();
+    }
+    document.addEventListener("DOMContentLoaded", initApp);
+  </script>
+</body>
+</html>
